@@ -1,4 +1,4 @@
-import { pgTable, varchar, pgEnum, uuid, date } from "drizzle-orm/pg-core";
+import { pgTable, varchar, pgEnum, uuid, date, boolean } from "drizzle-orm/pg-core";
 
 export const rolesEnum = pgEnum("roles", ["admin", "user"]);
 
@@ -9,6 +9,7 @@ export const usersTable = pgTable("users", {
   password: varchar().notNull(),
   role: rolesEnum().default("user"),
   refresh_token: varchar(),
+  is_online: boolean().default(false),
   created_at: date().default("now()"),
   updated_at: date(),
 });
