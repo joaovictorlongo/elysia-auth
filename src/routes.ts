@@ -6,6 +6,7 @@ import { signinBodySchema, signupBodySchema } from "./schema";
 import { jwt } from "@elysiajs/jwt";
 import { handleExpireTimestamp } from "./core/util";
 import { ACCESS_TOKEN_EXP, REFRESH_TOKEN_EXP } from "./core/constant";
+import { authPlugin } from "./auth-plugin";
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
   .use(jwt({
@@ -74,4 +75,68 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     }
   }, {
     body: signinBodySchema
+  })
+  .use(authPlugin)
+  .get("/me", async ({ user }) => {
+    return {
+      message: "User info",
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isOnline: user.is_online
+        }
+      }
+    }
+  })
+  .post("/refresh", async ({ cookie: { accessToken, refreshToken }, jwt }) => {
+    if (!refreshToken.value) {
+      return error(401, "Unauthorized");
+    }
+    const jwtPayload = await jwt.verify(refreshToken.value);
+    if (!jwtPayload) {
+      return error(401, "Unauthorized");
+    }
+    const userId = jwtPayload.sub!;
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!user) {
+      return error(401, "Unauthorized");
+    }
+    const accesssJWTToken = await jwt.sign({
+      sub: user.id,
+      exp: handleExpireTimestamp(ACCESS_TOKEN_EXP)
+    });
+    accessToken.set({
+      value: accesssJWTToken,
+      httpOnly: true,
+      maxAge: ACCESS_TOKEN_EXP,
+      path: "/",
+    });
+    const refreshJWTToken = await jwt.sign({
+      sub: user.id,
+      exp: handleExpireTimestamp(REFRESH_TOKEN_EXP)
+    });
+    refreshToken.set({
+      value: refreshJWTToken,
+      httpOnly: true,
+      maxAge: REFRESH_TOKEN_EXP,
+      path: "/",
+    });
+    await db.update(usersTable).set({ refresh_token: refreshJWTToken }).where(eq(usersTable.id, user.id));
+    return {
+      message: "Access token refreshed successfully",
+      accessToken: accesssJWTToken,
+      refreshToken: refreshJWTToken
+    }
+  })
+  .post("/logout", async ({ cookie: { accessToken, refreshToken }, user }) => {
+    accessToken.remove();
+    refreshToken.remove();
+    await db.update(usersTable).set({ is_online: false, refresh_token: null }).where(eq(usersTable.id, user.id));
+    return {
+      message: "Logout successfully",
+    }
   });

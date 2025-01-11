@@ -1,0 +1,38 @@
+### Sign up
+POST http://localhost:3000/api/auth/sign-up HTTP/1.1
+content-type: application/json
+
+{
+    "name": "João Longo",
+    "email": "joaolongo@email.com",
+    "password": "12345678",
+    "roleIsAdmin": true
+}
+
+### Sign in
+
+POST http://localhost:3000/api/auth/sign-in HTTP/1.1
+content-type: application/json
+
+{
+    "email": "joaolongo@email.com",
+    "password": "12345678"
+}
+
+### Protected routes
+
+GET http://localhost:3000/api/auth/me HTTP/1.1
+Authorization: Bearer your_token_here
+content-type: application/json
+
+### Refresh token
+
+POST http://localhost:3000/api/auth/refresh HTTP/1.1
+Authorization: Bearer your_token_here
+content-type: application/json
+
+### Logout
+
+POST http://localhost:3000/api/auth/logout HTTP/1.1
+Authorization: Bearer your_token_here
+content-type: application/json
