@@ -4,6 +4,8 @@ import { usersTable } from "./db/schema";
 import { eq } from "drizzle-orm";
 import { signinBodySchema, signupBodySchema } from "./schema";
 import { jwt } from "@elysiajs/jwt";
+import { handleExpireTimestamp } from "./core/util";
+import { ACCESS_TOKEN_EXP, REFRESH_TOKEN_EXP } from "./core/constant";
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
   .use(jwt({
@@ -32,26 +34,44 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
   }, {
     body: signupBodySchema
   })
-  .post("/sign-in", async ({ body }) => {
-
+  .post("/sign-in", async ({ body, jwt, cookie: { accessToken, refreshToken }, set }) => {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, body.email));
+    if (!user) {
+      return error(400, "The email or password is incorrect");
+    }
+    const matchPassword = await Bun.password.verify(body.password, user.password, "bcrypt");
+    if (!matchPassword) {
+      return error(400, "The email or password is incorrect");
+    }
+    const accesssJWTToken = await jwt.sign({
+      sub: user.id,
+      exp: handleExpireTimestamp(ACCESS_TOKEN_EXP)
+    });
+    accessToken.set({
+      value: accesssJWTToken,
+      httpOnly: true,
+      maxAge: ACCESS_TOKEN_EXP,
+      path: "/",
+    });
+    const refreshJWTToken = await jwt.sign({
+      sub: user.id,
+      exp: handleExpireTimestamp(REFRESH_TOKEN_EXP)
+    });
+    refreshToken.set({
+      value: refreshJWTToken,
+      httpOnly: true,
+      maxAge: REFRESH_TOKEN_EXP,
+      path: "/",
+    });
+    const updatedUser = await db.update(usersTable)
+      .set({ is_online: true, refresh_token: refreshJWTToken })
+      .where(eq(usersTable.id, user.id)).returning({ userId: usersTable.id, isOnline: usersTable.is_online });
     return {
-      message: "Sign in",
+      message: "Sign-in successfully",
+      user: updatedUser,
+      accessToken: accesssJWTToken,
+      refreshToken: refreshJWTToken
     }
   }, {
     body: signinBodySchema
-  })
-  .post("/refresh", async (c) => {
-    return {
-      message: "Refresh token",
-    }
-  })
-  .post("/logout", async (c) => {
-    return {
-      message: "Logout",
-    }
-  })
-  .get("/me", async (c) => {
-    return {
-      message: "User info",
-    }
   });
